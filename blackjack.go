@@ -28,11 +28,11 @@ type Player struct {
 
 var deckSize int = len(clubs) + len(hearts) + len(spades) + len(diamonds)
 var handSize int = 10
-var addr = flag.String("addr", ":1718", "http service address")
+var addr = flag.String("addr", ":8500", "http service address")
 
 func main() {
 	
-	http.Handle("/", http.HandlerFunc(QR))
+	    http.Handle("/", http.HandlerFunc(QR))
 	err := http.ListenAndServe(*addr, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe:",err)
