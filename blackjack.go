@@ -3,96 +3,111 @@ package main
 import (
 	"fmt"
 	"math/rand"
-	"strconv"
 	"time"
-	"log"
-	"net/http"
-	"flag"
 )
 
-var (
-	clubs = []string {"cking","cqueen","cjack","cace","c1","c2","c3","c4","c5","c6","c7","c8","c9"}
-	hearts = []string{"hking","hqueen","hjack","hace","h1","h2","h3","h4","h5","h6","h7","h8","h9"}
-	spades = []string{"sking","squeen","sjack","sace","s1","s2","s3","s4","s5","s6","s7","s8","s9"}
-	diamonds = []string{"dking","dqueen","djack","dace","d1","d2","d3","d4","d5","d6","d7","d8","d9"}	
-)
-
-/* struct Dealer Player */
-
-type Player struct {
-	dealer bool 
-	playerType string
-	playerCards []string
+// Card represents a playing card
+type Card struct {
+	Rank string
+	Suit string
 }
 
+// Deck represents a deck of cards
+type Deck []Card
 
-var deckSize int = len(clubs) + len(hearts) + len(spades) + len(diamonds)
-var handSize int = 10
-var addr = flag.String("addr", ":8500", "http service address")
+// NewDeck creates a new deck of cards
+func NewDeck() Deck {
+	suits := []string{"Hearts", "Diamonds", "Clubs", "Spades"}
+	ranks := []string{"A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"}
+	deck := make(Deck, 0, len(suits)*len(ranks))
+	for _, suit := range suits {
+		for _, rank := range ranks {
+			deck = append(deck, Card{Rank: rank, Suit: suit})
+		}
+	}
+	return deck
+}
+
+// Shuffle shuffles the deck
+func (d Deck) Shuffle() {
+	rand.Seed(time.Now().UnixNano())
+	rand.Shuffle(len(d), func(i, j int) { d[i], d[j] = d[j], d[i] })
+}
+
+// Deal deals a card from the deck
+func (d *Deck) Deal() Card {
+	card := (*d)[0]
+	*d = (*d)[1:]
+	return card
+}
+
+// Score calculates the score of a hand
+func Score(hand []Card) int {
+	score := 0
+	hasAce := false
+	for _, card := range hand {
+		switch card.Rank {
+		case "A":
+			hasAce = true
+			score += 11
+		case "J", "Q", "K":
+			score += 10
+		default:
+			score += int([]rune(card.Rank)[0] - '0')
+		}
+	}
+	if hasAce && score > 21 {
+		score -= 10
+	}
+	return score
+}
 
 func main() {
-	
-	    http.Handle("/", http.HandlerFunc(QR))
-	err := http.ListenAndServe(*addr, nil)
-	if err != nil {
-		log.Fatal("ListenAndServe:",err)
-	}
-	
-}
+	deck := NewDeck()
+	deck.Shuffle()
 
-func QR(w http.ResponseWriter, req *http.Request) {
-	//fmt.Println("<HTML><B>Hello, World!</HTML>")
-	fmt.Fprintf(w, "<HTML><B>Hello, World! %s</HTML>", req.URL.Path[1:])
-	cards := make([]string, deckSize)
-	hand := make([]string, handSize)
-	dealerPull := make([]int, deckSize)
-	
-	cards, dealerPull = shuffle(cards)
-	dealer := &Player{ true, "Dealer", cards }
-	player := &Player{ false, "Player 1", hand }
+	// Deal cards to player and dealer
+	playerHand := []Card{deck.Deal(), deck.Deal()}
+	dealerHand := []Card{deck.Deal(), deck.Deal()}
 
-	fmt.Fprintf(w,"<P>Would you like to play a game?<P>")		
-	fmt.Fprintf(w,"<P>Dealer's Cards %s", dealer)
-	fmt.Fprintf(w,"<P>Player's Cards %s", player)
-	fmt.Fprintf(w,"<P>Dealer Pull Order %s", dealerPull)
-}
+	// Print initial hands
+	fmt.Println("Your hand:", playerHand)
+	fmt.Println("Dealer's hand:", dealerHand[0], "and an unknown card")
 
-
-func shuffle(deck []string) ([]string, []int) {
-	for _, clubCard := range clubs {
-		deck = append(deck,clubCard)
-	}
-	for _, heartCard := range hearts {
-		deck = append(deck,heartCard)
-	}
-	for _, spadeCard := range spades {
-		deck = append(deck,spadeCard)
-	}
-	for _, diamondCard := range diamonds {
-		deck = append(deck,diamondCard)
-	}
-	//Fisher-Yates shuffle
-	rand.Seed(time.Now().UTC().UnixNano())
-	for i := range deck {
-		j := rand.Intn(i + 1)
-		deck[i], deck[j] = deck[j], deck[i]
+	// Player's turn
+	for Score(playerHand) < 21 {
+		fmt.Println("Your score:", Score(playerHand))
+		fmt.Print("Hit or stand? ")
+		var action string
+		fmt.Scanln(&action)
+		if action == "stand" {
+			break
+		}
+		playerHand = append(playerHand, deck.Deal())
+		fmt.Println("Your hand:", playerHand)
 	}
 
-	//lets try Perm
-	newlist := make([]int, deckSize) 
-	newlist = rand.Perm(52)
-	return deck, newlist
-}
+	playerScore := Score(playerHand)
+	fmt.Println("Your final score:", playerScore)
 
-func cardValue (card string) int {
-	var value int
-		
-	switch (card) {
-	case "ace", "king", "queen", "jack":
-		value = 10
-	default:
-		value, _ = strconv.Atoi(card)
+	// Dealer's turn
+	for Score(dealerHand) < 17 {
+		dealerHand = append(dealerHand, deck.Deal())
 	}
- 
-	return value
+	dealerScore := Score(dealerHand)
+	fmt.Println("Dealer's hand:", dealerHand)
+	fmt.Println("Dealer's final score:", dealerScore)
+
+	// Determine the winner
+	if playerScore > 21 {
+		fmt.Println("You bust! Dealer wins.")
+	} else if dealerScore > 21 {
+		fmt.Println("Dealer busts! You win.")
+	} else if playerScore > dealerScore {
+		fmt.Println("You win!")
+	} else if playerScore < dealerScore {
+		fmt.Println("Dealer wins.")
+	} else {
+		fmt.Println("It's a push!")
+	}
 }
